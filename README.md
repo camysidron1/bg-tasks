@@ -4,11 +4,11 @@ Smart terminal-based task management with AI-powered task generation.
 
 ## ✨ Features
 
-- **🎯 Quick Task Creation**: `bg taskname` creates timestamped task files instantly
-- **🤖 AI-Powered Tasks**: `bg -ai taskname` uses Claude 4 to analyze your terminal history and create intelligent task templates
+- **🎯 Quick Task Creation**: `bgt taskname` creates timestamped task files instantly
+- **🤖 AI-Powered Tasks**: `bgt -ai taskname` uses Claude 4 to analyze your terminal history and create intelligent task templates
 - **📝 Editor Agnostic**: Works with any text editor - vim, VS Code, nano, emacs, etc.
-- **🧹 Easy Cleanup**: `bg clear` safely removes all task files with confirmation
-- **⚙️ Smart Setup**: `bg --setup` automatically configures directories, gitignore, and environment
+- **🧹 Easy Cleanup**: `bgt clear` safely removes all task files with confirmation
+- **⚙️ Smart Setup**: `bgt --setup` automatically configures directories, gitignore, and environment
 
 ## 🔠️ Installation
 
@@ -19,28 +19,28 @@ npm install -g bg-task
 The package will automatically:
 1. **Detect your shell** (zsh/bash/fish)  
 2. **Navigate to select your project directory** (interactive folder tree)
-3. **Install the `bg` function** to your shell config
+3. **Install the `bgt` function** to your shell config
 
 ## 🎮 Usage
 
 ### Basic Commands
 ```bash
-bg taskname          # Create a new task file
-bg -ai taskname      # Create AI-powered task (requires API key)
-bg clear             # Delete all task files (with confirmation)
-bg --setup           # Setup/re-setup environment
+bgt taskname         # Create a new task file
+bgt -ai taskname     # Create AI-powered task (requires API key)
+bgt clear            # Delete all task files (with confirmation)
+bgt --setup          # Setup/re-setup environment
 ```
 
 ### Examples
 ```bash
 # Create a simple task
-bg fix-login-bug
+bgt fix-login-bug
 
 # Create an AI-powered task that analyzes your terminal history
-bg -ai implement-authentication
+bgt -ai implement-authentication
 
 # Clean up completed tasks
-bg clear
+bgt clear
 ```
 
 ## 🤖 AI Features Setup
@@ -93,7 +93,7 @@ Created: Thu Aug 25 14:30:22 PDT 2025
 
 ## 🔧 Customization
 
-After installation, you can edit the `bg` function in your shell config to customize the project directory or other settings.
+After installation, you can edit the `bgt` function in your shell config to customize the project directory or other settings.
 
 ## 🗑️ Uninstalling
 
@@ -101,7 +101,7 @@ After installation, you can edit the `bg` function in your shell config to custo
 npm uninstall -g bg-task
 ```
 
-Then manually remove the `bg` function from your shell config file (`~/.zshrc`, `~/.bashrc`, etc.).
+Then manually remove the `bgt` function from your shell config file (`~/.zshrc`, `~/.bashrc`, etc.).
 
 ## 🤝 Contributing
 
