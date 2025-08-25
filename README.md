@@ -27,7 +27,11 @@ The package will automatically:
 ```bash
 bgt taskname         # Create a new task file
 bgt -ai taskname     # Create AI-powered task (requires API key)
+bgt --sections-json file.json   # Create using sections JSON (requires jq)
+bgt --sections-stdin            # Read sections JSON from stdin (requires jq)
+bgt --no-open                   # Do not open editor (combine with other cmds)
 bgt continue         # Continue latest task (set active)
+bgt task continue    # Continue latest task (set active)
 bgt clear            # Delete all task files (with confirmation)
 bgt --setup          # Setup/re-setup environment
 ```
@@ -39,6 +43,19 @@ bgt fix-login-bug
 
 # Create an AI-powered task that analyzes your terminal history
 bgt -ai implement-authentication
+
+# Create a task programmatically (no editor)
+cat > sections.json <<'JSON'
+{
+  "Description": "Ignore To-Dos directory in git",
+  "Progress": [
+    "Add To-Dos/ to .gitignore",
+    "Untrack existing To-Dos files"
+  ],
+  "Notes": "Run: git rm -r --cached -- To-Dos"
+}
+JSON
+bgt --sections-json sections.json git-ignore-To-Dos --no-open
 
 # Clean up completed tasks
 bgt clear

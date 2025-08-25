@@ -19,6 +19,9 @@ bgt() {
     local use_ai=false
     local setup_mode=false
     local task_name=""
+    local sections_mode=false
+    local sections_json=""
+    local no_open=false
     
     # Function to load environment variables from .env files
     _load_env_file() {
@@ -114,11 +117,15 @@ bgt() {
         echo "  bgt                   Open latest task and set it active"
         echo "  bgt <name>            Create/switch to <name> and set active (prev -> pending)"
         echo "  bgt -ai <name>        Create AI-prefilled task using terminal context"
+        echo "  bgt --sections-json <file>  Create using sections JSON (skips AI)"
+        echo "  bgt --sections-stdin        Read sections JSON from stdin (skips AI)"
+        echo "  bgt --no-open               Do not open editor after creating/opening"
         echo "  bgt continue          Continue latest task (set active)"
         echo ""
         echo "Task utilities:"
         echo "  bgt task show [frag]  Print active/latest or matching task"
         echo "  bgt task open [frag]  Open active/latest or matching task (sets active)"
+        echo "  bgt task continue     Continue latest task (sets active)"
         echo "  bgt task pending      Mark the active task pending"
         echo "  bgt task complete     Mark the active task complete"
         echo "  bgt task clear        Delete the latest task (with confirmation)"
@@ -220,6 +227,29 @@ bgt() {
                 _print_help
                 return 0
                 ;;
+            --sections-json)
+                shift
+                sections_mode=true
+                sections_json="$(cat "$1" 2>/dev/null)"
+                if [[ -z "$sections_json" ]]; then
+                    echo "❌ Failed to read sections JSON from file: $1"
+                    return 1
+                fi
+                shift
+                ;;
+            --sections-stdin)
+                sections_mode=true
+                sections_json="$(cat -)"
+                if [[ -z "$sections_json" ]]; then
+                    echo "❌ No JSON received on stdin for --sections-stdin"
+                    return 1
+                fi
+                shift
+                ;;
+            --no-open)
+                no_open=true
+                shift
+                ;;
             --status|-s)
                 if [[ ! -d "$todos_dir" ]]; then
                 echo "📁 To-Dos directory doesn't exist. Run 'bgt --setup' first."
@@ -280,6 +310,26 @@ bgt() {
                             echo "ℹ️  No task file found to open"
                             return 1
                         fi
+                        ;;
+                    continue)
+                        # Continue latest task within 'task' namespace: set it active, mark previous pending, open it
+                        if [[ ! -d "$todos_dir" ]]; then
+                            echo "📁 To-Dos directory doesn't exist. Run 'bgt --setup' first."
+                            return 1
+                        fi
+                        local latest_tc="$(_find_latest_task)"
+                        if [[ -z "$latest_tc" ]]; then
+                            echo "ℹ️  No tasks found to continue"
+                            return 0
+                        fi
+                        local prev_tc="$(_get_active)"
+                        if [[ -n "$prev_tc" && "$prev_tc" != "$latest_tc" ]]; then
+                            _update_status "$prev_tc" "pending"
+                        fi
+                        _update_status "$latest_tc" "active"
+                        _set_active "$latest_tc"
+                        vim "$latest_tc"
+                        return 0
                         ;;
                     pending)
                         if [[ ! -d "$todos_dir" ]]; then
@@ -423,12 +473,19 @@ bgt() {
         done
     fi
     
+    # If sections were provided, disable AI path
+    if [[ "$sections_mode" == true ]]; then
+        use_ai=false
+    fi
+
     # If no task name provided, open latest or create a default
     if [[ -z "$task_name" ]]; then
         local latest_file="$(_find_latest_task)"
         if [[ -n "$latest_file" ]]; then
             _set_active "$latest_file"
-            vim "$latest_file"
+            if [[ "$no_open" == false ]]; then
+                vim "$latest_file"
+            fi
             return 0
         else
             task_name="task"
@@ -441,7 +498,9 @@ bgt() {
         if echo "$latest_file" | grep -q "_${task_name}\.md$"; then
             # Same as latest; just open and set active
             _set_active "$latest_file"
-            vim "$latest_file"
+            if [[ "$no_open" == false ]]; then
+                vim "$latest_file"
+            fi
             return 0
         fi
         # Different task requested; mark current active pending
@@ -546,24 +605,55 @@ Be specific and actionable. If the terminal history shows specific files, comman
         if [[ -n "$prev_active2" ]]; then
             _update_status "$prev_active2" "pending"
         fi
-        # Create the new task file with active status
-        echo "# Task: $task_name" > "$filename"
-        echo "Created: $(date)" >> "$filename"
-        echo "Status: active" >> "$filename"
-        echo "" >> "$filename"
+        # Create the new task file with active status and body
+        {
+            echo "# Task: $task_name"
+            echo "Created: $(date)"
+            echo "Status: active"
+            echo ""
+        } > "$filename"
+
+        if [[ "$sections_mode" == true ]]; then
+            # Require jq for JSON parsing
+            if ! command -v jq >/dev/null 2>&1; then
+                echo "❌ jq is required for --sections-json/--sections-stdin"
+                echo "   Install with: brew install jq"
+                return 1
+            fi
+            # Validate JSON
+            if ! echo "$sections_json" | jq . >/dev/null 2>&1; then
+                echo "❌ Invalid JSON provided for sections"
+                return 1
+            fi
+            # Render sections dynamically
+            for key in $(echo "$sections_json" | jq -r 'keys[]'); do
+                echo "## $key" >> "$filename"
+                local vtype=$(echo "$sections_json" | jq -r --arg k "$key" '.[$k] | type')
+                if [[ "$vtype" == "array" ]]; then
+                    echo "$sections_json" | jq -r --arg k "$key" '.[$k][]' | while IFS= read -r item; do
+                        echo "- [ ] $item" >> "$filename"
+                    done
+                else
+                    echo "$sections_json" | jq -r --arg k "$key" '.[$k]' >> "$filename"
+                fi
+                echo "" >> "$filename"
+            done
+        else
+            echo "## Description" >> "$filename"
+            echo "" >> "$filename"
+            echo "## Progress" >> "$filename"
+            echo "- [ ] " >> "$filename"
+            echo "" >> "$filename"
+            echo "## Notes" >> "$filename"
+            echo "" >> "$filename"
+        fi
         _set_active "$filename"
-        echo "" >> "$filename"
-        echo "## Description" >> "$filename"
-        echo "" >> "$filename"
-        echo "## Progress" >> "$filename"
-        echo "- [ ] " >> "$filename"
-        echo "" >> "$filename"
-        echo "## Notes" >> "$filename"
-        echo "" >> "$filename"
     fi
     
-    # Open in vim
-    vim "$filename"
+    # Open in vim unless suppressed
+    if [[ "$no_open" == false ]]; then
+        vim "$filename"
+    fi
 }
 
 # Alias for the function
