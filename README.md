@@ -127,7 +127,7 @@ A: Currently zsh, bash, and fish.
 A: Currently supports Anthropic's Claude. OpenAI support planned.
 
 **Q: How do I change the project directory after installation?**  
-A: Edit the `bg` function in your shell config file and update the `project_root` variable.
+A: Edit the `bgt` function in your shell config file and update the `project_root` variable.
 
 ---
 
