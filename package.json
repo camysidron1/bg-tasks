@@ -1,0 +1,54 @@
+{
+  "name": "bg-task",
+  "version": "1.0.0",
+  "description": "Smart terminal-based task management with AI-powered task generation and vim integration",
+  "main": "index.js",
+  "bin": {
+    "bg-task-install": "./bin/install.js",
+    "bg-task-uninstall": "./bin/uninstall.js"
+  },
+  "scripts": {
+    "postinstall": "node ./bin/install.js",
+    "preuninstall": "node ./bin/uninstall.js",
+    "test": "zsh tests/run.zsh"
+  },
+  "keywords": [
+    "task",
+    "management",
+    "terminal",
+    "cli",
+    "vim",
+    "ai",
+    "productivity",
+    "development",
+    "todo",
+    "claude",
+    "anthropic"
+  ],
+  "author": "Cam Ysidron",
+  "license": "MIT",
+  "homepage": "https://github.com/camysidron/bg-task#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/camysidron/bg-task.git"
+  },
+  "bugs": {
+    "url": "https://github.com/camysidron/bg-task/issues"
+  },
+  "engines": {
+    "node": ">=14.0.0"
+  },
+  "preferGlobal": true,
+  "dependencies": {
+    "chalk": "^4.1.2",
+    "inquirer": "^8.2.5",
+    "keypress": "^0.2.1"
+  },
+  "files": [
+    "bin/",
+    "lib/",
+    "templates/",
+    "README.md",
+    "LICENSE"
+  ]
+}

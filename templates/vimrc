@@ -1,0 +1,156 @@
+" ================================
+" VIM CONFIGURATION - BG-TASK
+" ================================
+
+" Vim-Plug Plugin Manager
+call plug#begin('~/.vim/plugged')
+
+" === THEMES & UI ===
+Plug 'morhetz/gruvbox'                " Gruvbox theme (dope ass theme)
+Plug 'vim-airline/vim-airline'         " Status line
+Plug 'vim-airline/vim-airline-themes'  " Status line themes
+
+" === AI AUTOCOMPLETE & CODING ===
+Plug 'Exafunction/codeium.vim'         " AI autocomplete with Claude support (FREE!)
+Plug 'neoclide/coc.nvim', {'branch': 'release'} " Intellisense engine
+
+" === SYNTAX & LANGUAGE SUPPORT ===
+Plug 'sheerun/vim-polyglot'            " Language pack
+Plug 'dense-analysis/ale'              " Linting and fixing
+Plug 'preservim/nerdcommenter'         " Easy commenting
+
+" === FILE NAVIGATION ===
+Plug 'preservim/nerdtree'              " File explorer
+Plug 'junegunn/fzf', { 'do': { -> fzf#install() } }  " Fuzzy finder
+Plug 'junegunn/fzf.vim'                " Fuzzy finder vim integration
+Plug 'airblade/vim-gitgutter'          " Git changes in gutter
+
+" === PRODUCTIVITY ===
+Plug 'tpope/vim-fugitive'              " Git integration
+Plug 'tpope/vim-surround'              " Easy surround text
+Plug 'jiangmiao/auto-pairs'            " Auto close brackets/quotes
+
+call plug#end()
+
+" ================================
+" GENERAL SETTINGS
+" ================================
+set number                    " Line numbers
+set relativenumber           " Relative line numbers
+set tabstop=4                " Tab width
+set shiftwidth=4             " Indent width
+set expandtab                " Use spaces instead of tabs
+set autoindent               " Auto indent
+set smartindent              " Smart indent
+set wrap                     " Line wrapping
+set ignorecase               " Case insensitive search
+set smartcase                " Case sensitive when uppercase present
+set hlsearch                 " Highlight search results
+set incsearch                " Incremental search
+set mouse=a                  " Mouse support
+set clipboard=unnamed        " Use system clipboard
+set backspace=indent,eol,start " Better backspace behavior
+set encoding=utf-8           " UTF-8 encoding
+set termguicolors            " True color support
+set cursorline               " Highlight current line
+set showmatch                " Show matching brackets
+set laststatus=2             " Always show status line
+set wildmenu                 " Command completion menu
+set scrolloff=8              " Keep 8 lines above/below cursor
+set updatetime=100           " Faster updates
+
+" ================================
+" THEME CONFIGURATION
+" ================================
+syntax enable
+set background=dark
+colorscheme gruvbox
+
+" Airline theme
+let g:airline_theme = 'gruvbox'
+let g:airline#extensions#tabline#enabled = 1
+
+" ================================
+" CODEIUM CONFIGURATION (AI)
+" ================================
+" Simplified Codeium key mappings:
+" Cmd+Enter = Accept AI suggestion
+" Cmd+Delete = Reject/Clear AI suggestion
+imap <D-CR> <Cmd>call codeium#Accept()<CR>
+imap <D-BS> <Cmd>call codeium#Clear()<CR>
+
+" ================================
+" COC.NVIM CONFIGURATION
+" ================================
+" Use tab for trigger completion
+inoremap <silent><expr> <TAB>
+      \ pumvisible() ? "\<C-n>" :
+      \ <SID>check_back_space() ? "\<TAB>" :
+      \ coc#refresh()
+inoremap <expr><S-TAB> pumvisible() ? "\<C-p>" : "\<C-h>"
+
+function! s:check_back_space() abort
+  let col = col('.') - 1
+  return !col || getline('.')[col - 1]  =~# '\s'
+endfunction
+
+" Use <cr> to confirm completion
+inoremap <expr> <cr> pumvisible() ? "\<C-y>" : "\<C-g>u\<CR>"
+
+" ================================
+" NERDTREE CONFIGURATION
+" ================================
+let NERDTreeShowHidden=1
+let NERDTreeIgnore=['\.git$', '\.DS_Store$', '__pycache__$']
+
+" ================================
+" FZF CONFIGURATION
+" ================================
+let g:fzf_preview_window = ['right:50%', 'ctrl-/']
+
+" ================================
+" KEY MAPPINGS
+" ================================
+" Leader key (space)
+let mapleader = " "
+
+" File explorer
+nnoremap <leader>e :NERDTreeToggle<CR>
+nnoremap <leader>f :NERDTreeFind<CR>
+
+" Fuzzy finder
+nnoremap <leader>p :Files<CR>
+nnoremap <leader>b :Buffers<CR>
+
+" Easy split navigation
+nnoremap <C-h> <C-w>h
+nnoremap <C-j> <C-w>j
+nnoremap <C-k> <C-w>k
+nnoremap <C-l> <C-w>l
+
+" Clear search highlighting
+nnoremap <leader>/ :nohlsearch<CR>
+
+" Quick save and quit
+nnoremap <leader>w :w<CR>
+nnoremap <leader>q :q<CR>
+nnoremap <leader>x :wq<CR>
+
+" Git shortcuts
+nnoremap <leader>gs :Git<CR>
+nnoremap <leader>gd :Gdiffsplit<CR>
+
+" ================================
+" AUTO COMMANDS
+" ================================
+" Auto close NerdTree if it's the only window left
+autocmd BufEnter * if tabpagenr('$') == 1 && winnr('$') == 1 && exists('b:NERDTree') && b:NERDTree.isTabTree() | quit | endif
+
+" Auto source vimrc when saved
+autocmd BufWritePost ~/.vimrc source ~/.vimrc
+
+" Return to last edit position when opening files
+autocmd BufReadPost *
+     \ if line("'\"") > 0 && line("'\"") <= line("$") |
+     \   exe "normal! g`\"" |
+     \ endif
