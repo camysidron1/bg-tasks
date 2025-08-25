@@ -27,6 +27,7 @@ The package will automatically:
 ```bash
 bgt taskname         # Create a new task file
 bgt -ai taskname     # Create AI-powered task (requires API key)
+bgt continue         # Continue latest task (set active)
 bgt clear            # Delete all task files (with confirmation)
 bgt --setup          # Setup/re-setup environment
 ```

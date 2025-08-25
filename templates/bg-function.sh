@@ -114,6 +114,7 @@ bgt() {
         echo "  bgt                   Open latest task and set it active"
         echo "  bgt <name>            Create/switch to <name> and set active (prev -> pending)"
         echo "  bgt -ai <name>        Create AI-prefilled task using terminal context"
+        echo "  bgt continue          Continue latest task (set active)"
         echo ""
         echo "Task utilities:"
         echo "  bgt task show [frag]  Print active/latest or matching task"
@@ -170,8 +171,8 @@ bgt() {
             echo "ℹ️  No .env files found in project root"
         fi
         
-        # Check for ANTHROPIC_API_KEY
-        if [[ -n "$ANTHROPIC_API_KEY" ]]; then
+        # Check for ANTHROPIC_API_KEY (safe under set -u)
+        if [[ -n "${ANTHROPIC_API_KEY-}" ]]; then
             echo "🤖 Anthropic API key loaded - AI features available!"
         else
             echo "⚠️  ANTHROPIC_API_KEY not found. AI features will be disabled."
@@ -197,6 +198,7 @@ bgt() {
         echo "  bgt                - Open latest task and set it active"
         echo "  bgt --status       - Show active/latest and recent tasks"
         echo "  bgt -ai taskname   - Create AI-prefilled task using terminal context"
+        echo "  bgt continue       - Continue latest task (set active)"
         echo "  bgt clear          - Delete all task files (with confirmation)"
         echo "  bgt --setup        - Re-run setup here"
         echo ""
@@ -346,6 +348,26 @@ bgt() {
                         ;;
                 esac
                 ;;
+            continue)
+                # Continue working on the latest task: set it active, mark previous active pending, open it
+                if [[ ! -d "$todos_dir" ]]; then
+                    echo "📁 To-Dos directory doesn't exist. Run 'bgt --setup' first."
+                    return 1
+                fi
+                local latest_c="$(_find_latest_task)"
+                if [[ -z "$latest_c" ]]; then
+                    echo "ℹ️  No tasks found to continue"
+                    return 0
+                fi
+                local prev_c="$(_get_active)"
+                if [[ -n "$prev_c" && "$prev_c" != "$latest_c" ]]; then
+                    _update_status "$prev_c" "pending"
+                fi
+                _update_status "$latest_c" "active"
+                _set_active "$latest_c"
+                vim "$latest_c"
+                return 0
+                ;;
             clear)
                 # Handle 'clear' command
                 local file_count=$(find "$todos_dir" -name "*.md" -type f 2>/dev/null | wc -l | tr -d ' ')
@@ -371,7 +393,7 @@ bgt() {
                 ;;
             -*)
                 echo "❌ Unknown flag: $1"
-                echo "Usage: bgt [--setup] [-ai] [taskname|clear]"
+                echo "Usage: bgt [--setup] [-ai] [taskname|continue|clear]"
                 return 1
                 ;;
             *)
@@ -393,8 +415,8 @@ bgt() {
         return 1
     fi
     
-    # Auto-load .env files if available and not already loaded
-    if [[ -z "$ANTHROPIC_API_KEY" && "$use_ai" == true ]]; then
+    # Auto-load .env files if available and not already loaded (safe under set -u)
+    if [[ -z "${ANTHROPIC_API_KEY-}" && "$use_ai" == true ]]; then
         local env_files=("$project_root/.env" "$project_root/local.env" "$project_root/.env.local")
         for env_file in "${env_files[@]}"; do
             _load_env_file "$env_file" >/dev/null
@@ -437,8 +459,8 @@ bgt() {
         # Capture current active to mark pending after successful creation
         local prev_active="$(_get_active)"
         
-        # Check if API key is available
-        if [[ -z "$ANTHROPIC_API_KEY" ]]; then
+        # Check if API key is available (safe under set -u)
+        if [[ -z "${ANTHROPIC_API_KEY-}" ]]; then
             echo "⚠️  ANTHROPIC_API_KEY not found. Using default template."
             echo "   Run 'bgt --setup' for setup instructions."
             use_ai=false

@@ -1,6 +1,6 @@
 {
   "name": "bgt-task",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "Smart terminal-based task management with AI-powered task generation and vim integration",
   "main": "index.js",
   "bin": {

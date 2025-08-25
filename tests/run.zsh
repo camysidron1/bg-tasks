@@ -70,6 +70,16 @@ step "bg task clear deletes latest with confirmation and updates active"
 sleep 1; bgt beta || true
 BETA_FILE=$(ls -1t "$PROJ/To-Dos"/*_beta.md | head -1)
 [[ -f "$BETA_FILE" ]] || fail "beta task missing"
+
+step "bg continue sets latest active and previous pending"
+# Switch active back to alpha to simulate working on older task
+bgt task open alpha || true
+bgt continue || true
+[[ "$(cat "$PROJ/To-Dos/.active")" == "$BETA_FILE" ]] || fail "continue didn't activate latest"
+grep -q '^Status: pending' "$ALPHA_FILE" || fail "previous not pending after continue"
+grep -q '^Status: active' "$BETA_FILE" || fail "latest not active after continue"
+pass "continue ok"
+
 echo y | bgt task clear
 [[ ! -f "$BETA_FILE" ]] || fail "beta file not deleted"
 pass "task clear ok"
