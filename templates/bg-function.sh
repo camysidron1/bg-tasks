@@ -18,7 +18,6 @@ bgt() {
     local todos_dir="$project_root/To-Dos"
     local use_ai=false
     local setup_mode=false
-    local task_name=""
     local sections_mode=false
     local sections_json=""
     local no_open=false
@@ -44,7 +43,12 @@ bgt() {
 
     # Find latest task file (by timestamped filename)
     _find_latest_task() {
-        ls -1t "$todos_dir"/*.md 2>/dev/null | head -1
+        print -rl -- "$todos_dir"/*.md(N) | sort -r | head -1
+    }
+
+    # List tasks newest-first by filename timestamp (stable across edits)
+    _list_tasks_desc() {
+        print -rl -- "$todos_dir"/*.md(N) | sort -r
     }
 
     # Active task pointer helpers
@@ -99,11 +103,183 @@ bgt() {
             echo "Latest:       $(basename "$latest")"
         fi
         echo "Recent tasks:"
-        ls -1t "$todos_dir"/*.md 2>/dev/null | head -5 | while read -r f; do
+        _list_tasks_desc | head -5 | while read -r f; do
             local st=$(grep -m1 '^Status:' "$f" 2>/dev/null | awk -F': ' '{print $2}')
             [[ -z "$st" ]] && st="unknown"
             echo "  - $(basename "$f") [${st}]"
         done
+    }
+
+    # Create a task (optionally AI/sections). Usage: _create_task <name>
+    _create_task() {
+        local task_name="$1"
+        # If latest already matches name, just open and set active
+        local latest_file="$(_find_latest_task)"
+        if [[ -n "$latest_file" ]] && echo "$latest_file" | grep -q "_${task_name}\.md$"; then
+            _set_active "$latest_file"
+            if [[ "$no_open" == false ]]; then
+                vim "$latest_file"
+            fi
+            return 0
+        fi
+
+        local filename="$todos_dir/$(date +"%Y-%m-%d_%H-%M-%S")_${task_name}.md"
+
+        # If sections were provided, disable AI path
+        if [[ "$sections_mode" == true ]]; then
+            use_ai=false
+        fi
+
+        # Auto-load .env files if available and not already loaded (safe under set -u)
+        if [[ -z "${ANTHROPIC_API_KEY-}" && "$use_ai" == true ]]; then
+            local env_files=("$project_root/.env" "$project_root/local.env" "$project_root/.env.local")
+            for env_file in "${env_files[@]}"; do
+                _load_env_file "$env_file" >/dev/null
+            done
+        fi
+
+        if [[ "$use_ai" == true ]]; then
+            echo "🤖 Generating AI-powered task template..."
+            local prev_active="$(_get_active)"
+            if [[ -z "${ANTHROPIC_API_KEY-}" ]]; then
+                echo "⚠️  ANTHROPIC_API_KEY not found. Using default template."
+                echo "   Run 'bgt --setup' for setup instructions."
+                use_ai=false
+            else
+                local history_context=""
+                history_context=$(fc -ln -50 2>/dev/null | grep -v ' bgt ' | tail -20)
+                if [[ -z "$history_context" && -r ${HISTFILE:-$HOME/.zsh_history} ]]; then
+                    history_context=$(tail -n 50 "${HISTFILE:-$HOME/.zsh_history}" 2>/dev/null | sed 's/^: [0-9]*:[0-9]*;//' | grep -v ' bgt ' | tail -20)
+                fi
+                local current_dir=$(pwd)
+                local git_status=""
+                if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+                    git_status=$(git status --porcelain 2>/dev/null | head -10)
+                fi
+                local ai_prompt="You are helping create a development task based on recent terminal activity.
+
+Context:
+- Current directory: $current_dir
+- Task name: $task_name
+- Recent terminal commands:
+$history_context
+
+Git status (if available):
+$git_status
+
+Please create a concise but thorough task description in markdown format with the following structure:
+
+# Task: $task_name
+Created: $(date)
+
+## Description
+[2-3 sentences describing what this task involves based on the terminal context]
+
+## Progress
+- [ ] [First actionable step based on context]
+- [ ] [Second actionable step]
+- [ ] [Third actionable step if relevant]
+
+## Notes
+[Any relevant technical notes, file paths, or context from the terminal history]
+
+Be specific and actionable. If the terminal history shows specific files, commands, or errors, reference them."
+                local ai_response=$(curl -s -X POST https://api.anthropic.com/v1/messages \
+                    -H "Content-Type: application/json" \
+                    -H "x-api-key: $ANTHROPIC_API_KEY" \
+                    -H "anthropic-version: 2023-06-01" \
+                    -d "{\"model\": \"claude-3-5-sonnet-20241022\", \"max_tokens\": 1000, \"messages\": [{ \"role\": \"user\", \"content\": $(echo "$ai_prompt" | jq -Rs .)}]}" 2>/dev/null | jq -r '.content[0].text' 2>/dev/null)
+                if [[ -n "$ai_response" && "$ai_response" != "null" && "$ai_response" != "" ]]; then
+                    echo "$ai_response" > "$filename"
+                    if ! grep -q '^Status:' "$filename" 2>/dev/null; then
+                        awk 'NR==1{print;next} NR==2{print; print "Status: active"; next} {print}' "$filename" > "$filename.tmp" && mv "$filename.tmp" "$filename"
+                    else
+                        _update_status "$filename" "active"
+                    fi
+                    if [[ -n "$prev_active" ]]; then
+                        _update_status "$prev_active" "pending"
+                    fi
+                    _set_active "$filename"
+                    echo "✨ AI-generated task template created!"
+                else
+                    echo "⚠️  AI generation failed, using default template"
+                    use_ai=false
+                fi
+            fi
+        fi
+
+        if [[ "$use_ai" == false ]]; then
+            local prev_active2="$(_get_active)"
+            if [[ -n "$prev_active2" ]]; then
+                _update_status "$prev_active2" "pending"
+            fi
+            {
+                echo "# Task: $task_name"
+                echo "Created: $(date)"
+                echo "Status: active"
+                echo ""
+            } > "$filename"
+            if [[ "$sections_mode" == true ]]; then
+                if ! command -v jq >/dev/null 2>&1; then
+                    echo "❌ jq is required for --sections-json/--sections-stdin"
+                    echo "   Install with: brew install jq"
+                    return 1
+                fi
+                if ! echo "$sections_json" | jq . >/dev/null 2>&1; then
+                    echo "❌ Invalid JSON provided for sections"
+                    return 1
+                fi
+                for key in $(echo "$sections_json" | jq -r 'keys[]'); do
+                    echo "## $key" >> "$filename"
+                    local vtype=$(echo "$sections_json" | jq -r --arg k "$key" '.[$k] | type')
+                    if [[ "$vtype" == "array" ]]; then
+                        echo "$sections_json" | jq -r --arg k "$key" '.[$k][]' | while IFS= read -r item; do
+                            echo "- [ ] $item" >> "$filename"
+                        done
+                    else
+                        echo "$sections_json" | jq -r --arg k "$key" '.[$k]' >> "$filename"
+                    fi
+                    echo "" >> "$filename"
+                done
+            else
+                echo "## Description" >> "$filename"
+                echo "" >> "$filename"
+                echo "## Progress" >> "$filename"
+                echo "- [ ] " >> "$filename"
+                echo "" >> "$filename"
+                echo "## Notes" >> "$filename"
+                echo "" >> "$filename"
+            fi
+            _set_active "$filename"
+        fi
+
+        if [[ "$no_open" == false ]]; then
+            vim "$filename"
+        fi
+        return 0
+    }
+
+    # Agent invocation hook: Use BGT_AGENT_CMD or ~/.config/bgt-task/agent.zsh
+    _invoke_agent() {
+        local file="$1"
+        export BGT_TASK_FILE="$file"
+        export BGT_PROJECT_ROOT="$project_root"
+        # Env var hook
+        if [[ -n "${BGT_AGENT_CMD-}" ]]; then
+            eval "$BGT_AGENT_CMD"
+            return $?
+        fi
+        # Script/function hook
+        local agent_hook="$HOME/.config/bgt-task/agent.zsh"
+        if [[ -f "$agent_hook" ]]; then
+            # shellcheck disable=SC1090
+            . "$agent_hook"
+            if typeset -f bgt_agent_continue >/dev/null 2>&1; then
+                bgt_agent_continue "$file" "$project_root"
+                return $?
+            fi
+        fi
+        return 127
     }
 
     _print_help() {
@@ -115,17 +291,18 @@ bgt() {
         echo ""
         echo "Create & switch:"
         echo "  bgt                   Open latest task and set it active"
-        echo "  bgt <name>            Create/switch to <name> and set active (prev -> pending)"
-        echo "  bgt -ai <name>        Create AI-prefilled task using terminal context"
-        echo "  bgt --sections-json <file>  Create using sections JSON (skips AI)"
-        echo "  bgt --sections-stdin        Read sections JSON from stdin (skips AI)"
+        echo "  bgt task new <name>   Create a new task (prev active -> pending); combine with -ai/sections"
+        echo "  bgt -ai task new <name>  Create AI-prefilled task using terminal context"
+        echo "  bgt --sections-json <file>  Use sections JSON for creation (with task new)"
+        echo "  bgt --sections-stdin        Read sections JSON from stdin (with task new)"
         echo "  bgt --no-open               Do not open editor after creating/opening"
-        echo "  bgt continue          Continue latest task (set active)"
+        echo "  bgt continue          Continue latest task (agent if configured)"
         echo ""
         echo "Task utilities:"
         echo "  bgt task show [frag]  Print active/latest or matching task"
         echo "  bgt task open [frag]  Open active/latest or matching task (sets active)"
-        echo "  bgt task continue     Continue latest task (sets active)"
+        echo "  bgt task continue     Continue latest task (agent if configured)"
+        echo "  bgt task select <up|down|top|bottom|index|name>  Select a different task as active"
         echo "  bgt task pending      Mark the active task pending"
         echo "  bgt task complete     Mark the active task complete"
         echo "  bgt task clear        Delete the latest task (with confirmation)"
@@ -201,13 +378,14 @@ bgt() {
         echo "• Completing a task: sets Status: complete and adds 'Completed: <timestamp>'"
         echo ""
         echo "Commands:"
-        echo "  bgt taskname       - Create/switch to a task and set it active"
         echo "  bgt                - Open latest task and set it active"
         echo "  bgt --status       - Show active/latest and recent tasks"
-        echo "  bgt -ai taskname   - Create AI-prefilled task using terminal context"
+        echo "  bgt -ai task new X - Create AI-prefilled task using terminal context"
+        echo "  bgt task new X     - Create a new task"
         echo "  bgt continue       - Continue latest task (set active)"
         echo "  bgt clear          - Delete all task files (with confirmation)"
         echo "  bgt --setup        - Re-run setup here"
+        echo "  bgt task select    - Select a different task as active (stack traversal)"
         echo ""
         return 0
     }
@@ -273,7 +451,7 @@ bgt() {
                         local target="$(_get_active)"
                         [[ -z "$target" ]] && target="$(_find_latest_task)"
                         if [[ -n "$query" ]]; then
-                            local match=$(ls -1t "$todos_dir"/*.md 2>/dev/null | grep "/[^/]*${query}[^/]*\.md$" | head -1)
+                            local match=$(_list_tasks_desc | grep "/[^/]*${query}[^/]*\.md$" | head -1)
                             if [[ -n "$match" ]]; then
                                 target="$match"
                             fi
@@ -297,14 +475,16 @@ bgt() {
                         local target2="$(_get_active)"
                         [[ -z "$target2" ]] && target2="$(_find_latest_task)"
                         if [[ -n "$query2" ]]; then
-                            local match2=$(ls -1t "$todos_dir"/*.md 2>/dev/null | grep "/[^/]*${query2}[^/]*\.md$" | head -1)
+                            local match2=$(_list_tasks_desc | grep "/[^/]*${query2}[^/]*\.md$" | head -1)
                             if [[ -n "$match2" ]]; then
                                 target2="$match2"
                             fi
                         fi
                         if [[ -n "$target2" && -f "$target2" ]]; then
                             _set_active "$target2"
-                            vim "$target2"
+                            if [[ "$no_open" == false ]]; then
+                                vim "$target2"
+                            fi
                             return 0
                         else
                             echo "ℹ️  No task file found to open"
@@ -312,7 +492,7 @@ bgt() {
                         fi
                         ;;
                     continue)
-                        # Continue latest task within 'task' namespace: set it active, mark previous pending, open it
+                        # Continue latest task within 'task' namespace: set it active; prefer agent
                         if [[ ! -d "$todos_dir" ]]; then
                             echo "📁 To-Dos directory doesn't exist. Run 'bgt --setup' first."
                             return 1
@@ -328,7 +508,123 @@ bgt() {
                         fi
                         _update_status "$latest_tc" "active"
                         _set_active "$latest_tc"
-                        vim "$latest_tc"
+                        if _invoke_agent "$latest_tc"; then
+                            return 0
+                        fi
+                        if [[ "$no_open" == false ]]; then
+                            vim "$latest_tc"
+                        fi
+                        return 0
+                        ;;
+                    new|create)
+                        # Create a new task explicitly: bgt [flags] task new <name>
+                        shift || true
+                        local new_name="${1:-}"
+                        if [[ -z "$new_name" ]]; then
+                            echo "Usage: bgt task new <name> [--no-open] [-ai|--sections-json <file>|--sections-stdin]"
+                            return 1
+                        fi
+                        _create_task "$new_name"
+                        return $?
+                        ;;
+                    select)
+                        # Select a different task to be active using stack semantics
+                        # Usage: bgt task select <up|down|top|bottom|index|name-fragment|filepath>
+                        if [[ ! -d "$todos_dir" ]]; then
+                            echo "📁 To-Dos directory doesn't exist. Run 'bgt --setup' first."
+                            return 1
+                        fi
+                        # Build ordered stack: newest first
+                        local stack_list
+                        stack_list=$(_list_tasks_desc)
+                        if [[ -z "$stack_list" ]]; then
+                            echo "ℹ️  No tasks available to select"
+                            return 0
+                        fi
+                        local -a tasks
+                        tasks=(${(f)stack_list})
+                        local current="$(_get_active)"
+                        # Find current index (1-based)
+                        local cur_idx=1
+                        local j
+                        for (( j=1; j<=${#tasks}; j++ )); do
+                            if [[ "${tasks[$j]}" == "$current" ]]; then
+                                cur_idx=$j
+                                break
+                            fi
+                        done
+                        shift || true
+                        local sel="${1:-}"
+                        local target_path=""
+                        local target_idx=0
+                        if [[ -z "$sel" ]]; then
+                            echo "Usage: bgt task select <up|down|top|bottom|index|name-fragment|filepath>"
+                            echo "Current: $cur_idx/${#tasks} -> $(basename "$current")"
+                            return 1
+                        fi
+                        case "$sel" in
+                            up)
+                                target_idx=$(( cur_idx + 1 ))
+                                ;;
+                            down)
+                                target_idx=$(( cur_idx - 1 ))
+                                ;;
+                            top)
+                                target_idx=1
+                                ;;
+                            bottom)
+                                target_idx=${#tasks}
+                                ;;
+                            *)
+                                if [[ "$sel" =~ ^[0-9]+$ ]]; then
+                                    target_idx=$sel
+                                else
+                                    # Treat as filepath, exact basename, or name fragment
+                                    if [[ -f "$sel" ]]; then
+                                        target_path="$sel"
+                                    else
+                                        if [[ "$sel" == *.md ]]; then
+                                            local match_exact
+                                            match_exact=$(_list_tasks_desc | awk -F'/' -v b="$sel" '{if ($NF==b){print; exit}}')
+                                            if [[ -n "$match_exact" ]]; then
+                                                target_path="$match_exact"
+                                            fi
+                                        else
+                                            local match
+                                            match=$(_list_tasks_desc | grep "/[^/]*${sel}[^/]*\\.md$" | head -1)
+                                            if [[ -n "$match" ]]; then
+                                                target_path="$match"
+                                            fi
+                                        fi
+                                    fi
+                                fi
+                                ;;
+                        esac
+                        if [[ $target_idx -gt 0 ]]; then
+                            if (( target_idx < 1 || target_idx > ${#tasks} )); then
+                                echo "❌ Index out of range: $target_idx (1..${#tasks})"
+                                return 1
+                            fi
+                            target_path="${tasks[$target_idx]}"
+                        fi
+                        if [[ -z "$target_path" ]]; then
+                            echo "❌ No matching task found for: $sel"
+                            return 1
+                        fi
+                        if [[ "$target_path" == "$current" ]]; then
+                            echo "ℹ️  Already active: $(basename "$current")"
+                            return 0
+                        fi
+                        # Update statuses and active pointer
+                        if [[ -n "$current" ]]; then
+                            _update_status "$current" "pending"
+                        fi
+                        _update_status "$target_path" "active"
+                        _set_active "$target_path"
+                        echo "➡️  Active now: $(basename "$target_path")"
+                        if [[ "$no_open" == false ]]; then
+                            vim "$target_path"
+                        fi
                         return 0
                         ;;
                     pending)
@@ -399,7 +695,7 @@ bgt() {
                 esac
                 ;;
             continue)
-                # Continue working on the latest task: set it active, mark previous active pending, open it
+                # Continue working on the latest task: set it active; prefer agent
                 if [[ ! -d "$todos_dir" ]]; then
                     echo "📁 To-Dos directory doesn't exist. Run 'bgt --setup' first."
                     return 1
@@ -415,7 +711,12 @@ bgt() {
                 fi
                 _update_status "$latest_c" "active"
                 _set_active "$latest_c"
-                vim "$latest_c"
+                if _invoke_agent "$latest_c"; then
+                    return 0
+                fi
+                if [[ "$no_open" == false ]]; then
+                    vim "$latest_c"
+                fi
                 return 0
                 ;;
             clear)
@@ -447,8 +748,9 @@ bgt() {
                 return 1
                 ;;
             *)
-                task_name="$1"
-                shift
+                echo "❌ Unknown command or argument: $1"
+                echo "Try: bgt --help"
+                return 1
                 ;;
         esac
     done
@@ -478,181 +780,17 @@ bgt() {
         use_ai=false
     fi
 
-    # If no task name provided, open latest or create a default
-    if [[ -z "$task_name" ]]; then
-        local latest_file="$(_find_latest_task)"
-        if [[ -n "$latest_file" ]]; then
-            _set_active "$latest_file"
-            if [[ "$no_open" == false ]]; then
-                vim "$latest_file"
-            fi
-            return 0
-        else
-            task_name="task"
-        fi
-    fi
-    
-    # If a name is provided, create a new task when it's not the latest
+    # If no args led to an action, open latest or create a default initial task
     local latest_file="$(_find_latest_task)"
     if [[ -n "$latest_file" ]]; then
-        if echo "$latest_file" | grep -q "_${task_name}\.md$"; then
-            # Same as latest; just open and set active
-            _set_active "$latest_file"
-            if [[ "$no_open" == false ]]; then
-                vim "$latest_file"
-            fi
-            return 0
+        _set_active "$latest_file"
+        if [[ "$no_open" == false ]]; then
+            vim "$latest_file"
         fi
-        # Different task requested; mark current active pending
-        local current_active="$(_get_active)"
-        if [[ -n "$current_active" && "$current_active" != "$latest_file" ]]; then
-            _update_status "$current_active" "pending"
-        fi
-    fi
-    
-    local timestamp=$(date +"%Y-%m-%d_%H-%M-%S")
-    local filename="$todos_dir/${timestamp}_${task_name}.md"
-    
-    if [[ "$use_ai" == true ]]; then
-        echo "🤖 Generating AI-powered task template..."
-        # Capture current active to mark pending after successful creation
-        local prev_active="$(_get_active)"
-        
-        # Check if API key is available (safe under set -u)
-        if [[ -z "${ANTHROPIC_API_KEY-}" ]]; then
-            echo "⚠️  ANTHROPIC_API_KEY not found. Using default template."
-            echo "   Run 'bgt --setup' for setup instructions."
-            use_ai=false
-        fi
-    fi
-    
-    if [[ "$use_ai" == true ]]; then
-        # Get recent terminal history (last 20 commands, excluding bg commands)
-        local history_context=""
-        history_context=$(fc -ln -50 2>/dev/null | grep -v ' bgt ' | tail -20)
-        if [[ -z "$history_context" && -r ${HISTFILE:-$HOME/.zsh_history} ]]; then
-            history_context=$(tail -n 50 "${HISTFILE:-$HOME/.zsh_history}" 2>/dev/null | sed 's/^: [0-9]*:[0-9]*;//' | grep -v ' bgt ' | tail -20)
-        fi
-        local current_dir=$(pwd)
-        local git_status=""
-        
-        # Try to get git context if we're in a git repo
-        if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-            git_status=$(git status --porcelain 2>/dev/null | head -10)
-        fi
-        
-        # Create AI prompt
-        local ai_prompt="You are helping create a development task based on recent terminal activity.
-
-Context:
-- Current directory: $current_dir
-- Task name: $task_name
-- Recent terminal commands:
-$history_context
-
-Git status (if available):
-$git_status
-
-Please create a concise but thorough task description in markdown format with the following structure:
-
-# Task: $task_name
-Created: $(date)
-
-## Description
-[2-3 sentences describing what this task involves based on the terminal context]
-
-## Progress
-- [ ] [First actionable step based on context]
-- [ ] [Second actionable step]
-- [ ] [Third actionable step if relevant]
-
-## Notes
-[Any relevant technical notes, file paths, or context from the terminal history]
-
-Be specific and actionable. If the terminal history shows specific files, commands, or errors, reference them."
-        
-        # Call Claude API
-        local ai_response=$(curl -s -X POST https://api.anthropic.com/v1/messages \
-            -H "Content-Type: application/json" \
-            -H "x-api-key: $ANTHROPIC_API_KEY" \
-            -H "anthropic-version: 2023-06-01" \
-            -d "{\"model\": \"claude-3-5-sonnet-20241022\", \"max_tokens\": 1000, \"messages\": [{ \"role\": \"user\", \"content\": $(echo "$ai_prompt" | jq -Rs .)}]}" 2>/dev/null | jq -r '.content[0].text' 2>/dev/null)
-        
-        if [[ -n "$ai_response" && "$ai_response" != "null" && "$ai_response" != "" ]]; then
-            echo "$ai_response" > "$filename"
-            # Ensure Status line exists and is active
-            if ! grep -q '^Status:' "$filename" 2>/dev/null; then
-                awk 'NR==1{print;next} NR==2{print; print "Status: active"; next} {print}' "$filename" > "$filename.tmp" && mv "$filename.tmp" "$filename"
-            else
-                _update_status "$filename" "active"
-            fi
-            # Mark previous active pending and set new active
-            if [[ -n "$prev_active" ]]; then
-                _update_status "$prev_active" "pending"
-            fi
-            _set_active "$filename"
-            echo "✨ AI-generated task template created!"
-        else
-            echo "⚠️  AI generation failed, using default template"
-            use_ai=false
-        fi
-    fi
-    
-    # Fallback to default template if AI didn't work or wasn't used
-    if [[ "$use_ai" == false ]]; then
-        # Mark previous active pending (before creating the new file)
-        local prev_active2="$(_get_active)"
-        if [[ -n "$prev_active2" ]]; then
-            _update_status "$prev_active2" "pending"
-        fi
-        # Create the new task file with active status and body
-        {
-            echo "# Task: $task_name"
-            echo "Created: $(date)"
-            echo "Status: active"
-            echo ""
-        } > "$filename"
-
-        if [[ "$sections_mode" == true ]]; then
-            # Require jq for JSON parsing
-            if ! command -v jq >/dev/null 2>&1; then
-                echo "❌ jq is required for --sections-json/--sections-stdin"
-                echo "   Install with: brew install jq"
-                return 1
-            fi
-            # Validate JSON
-            if ! echo "$sections_json" | jq . >/dev/null 2>&1; then
-                echo "❌ Invalid JSON provided for sections"
-                return 1
-            fi
-            # Render sections dynamically
-            for key in $(echo "$sections_json" | jq -r 'keys[]'); do
-                echo "## $key" >> "$filename"
-                local vtype=$(echo "$sections_json" | jq -r --arg k "$key" '.[$k] | type')
-                if [[ "$vtype" == "array" ]]; then
-                    echo "$sections_json" | jq -r --arg k "$key" '.[$k][]' | while IFS= read -r item; do
-                        echo "- [ ] $item" >> "$filename"
-                    done
-                else
-                    echo "$sections_json" | jq -r --arg k "$key" '.[$k]' >> "$filename"
-                fi
-                echo "" >> "$filename"
-            done
-        else
-            echo "## Description" >> "$filename"
-            echo "" >> "$filename"
-            echo "## Progress" >> "$filename"
-            echo "- [ ] " >> "$filename"
-            echo "" >> "$filename"
-            echo "## Notes" >> "$filename"
-            echo "" >> "$filename"
-        fi
-        _set_active "$filename"
-    fi
-    
-    # Open in vim unless suppressed
-    if [[ "$no_open" == false ]]; then
-        vim "$filename"
+        return 0
+    else
+        _create_task "task"
+        return $?
     fi
 }
 

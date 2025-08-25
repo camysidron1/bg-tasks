@@ -34,9 +34,9 @@ DEF_FILE=$(ls -1t "$PROJ/To-Dos"/*.md | head -1)
 grep -q '^Status: active' "$DEF_FILE" || fail "default task not active"
 pass "default task created and active"
 
-step "bg alpha creates new task and marks previous pending"
+step "bgt task new alpha creates new task and marks previous pending"
 sleep 1
-bgt alpha || true
+bgt task new alpha || true
 ALPHA_FILE=$(ls -1t "$PROJ/To-Dos"/*_alpha.md | head -1)
 [[ -f "$ALPHA_FILE" ]] || fail "alpha task missing"
 [[ "$(cat "$PROJ/To-Dos/.active")" == "$ALPHA_FILE" ]] || fail "alpha not active"
@@ -54,6 +54,32 @@ SHOW=$(bgt task show alpha)
 print -r -- "$SHOW" | grep -q "# Task: alpha" || fail "show did not print alpha"
 pass "show ok"
 
+step "bg task select up moves to older (previous) task"
+bgt task select up || true
+[[ "$(basename "$(cat "$PROJ/To-Dos/.active")")" == "$(basename "$DEF_FILE")" ]] || fail "select up did not activate older task"
+pass "select up ok"
+
+step "bg task select down returns to newer task"
+bgt task select down || true
+[[ "$(basename "$(cat "$PROJ/To-Dos/.active")")" == "$(basename "$ALPHA_FILE")" ]] || fail "select down did not activate newer task"
+pass "select down ok"
+
+step "bg task select 1 selects top (newest)"
+bgt task select 1 || true
+[[ "$(basename "$(cat "$PROJ/To-Dos/.active")")" == "$(basename "$ALPHA_FILE")" ]] || fail "select 1 not top"
+pass "select 1 ok"
+
+step "bg task select bottom selects oldest"
+bgt task select bottom || true
+[[ "$(basename "$(cat "$PROJ/To-Dos/.active")")" == "$(basename "$DEF_FILE")" ]] || fail "select bottom not oldest"
+pass "select bottom ok"
+
+# Restore active to newest (alpha) before status tests
+step "bg task select top selects newest (alpha) before status tests"
+bgt task select top || true
+[[ "$(cat "$PROJ/To-Dos/.active")" == "$ALPHA_FILE" ]] || fail "select top did not activate alpha"
+pass "select top ok"
+
 step "bg task pending marks active pending"
 bgt task pending
 grep -q '^Status: pending' "$ALPHA_FILE" || fail "alpha not pending"
@@ -67,7 +93,7 @@ pass "complete ok"
 
 step "bg task clear deletes latest with confirmation and updates active"
 # Create another task to be latest
-sleep 1; bgt beta || true
+sleep 1; bgt task new beta || true
 BETA_FILE=$(ls -1t "$PROJ/To-Dos"/*_beta.md | head -1)
 [[ -f "$BETA_FILE" ]] || fail "beta task missing"
 
@@ -76,9 +102,15 @@ step "bg continue sets latest active and previous pending"
 bgt task open alpha || true
 bgt continue || true
 [[ "$(cat "$PROJ/To-Dos/.active")" == "$BETA_FILE" ]] || fail "continue didn't activate latest"
+# Verify statuses immediately after continue
 grep -q '^Status: pending' "$ALPHA_FILE" || fail "previous not pending after continue"
 grep -q '^Status: active' "$BETA_FILE" || fail "latest not active after continue"
 pass "continue ok"
+
+step "bg task select $(basename $ALPHA_FILE) selects by filename"
+bgt task select "$(basename "$ALPHA_FILE")" || true
+[[ "$(cat "$PROJ/To-Dos/.active")" == "$ALPHA_FILE" ]] || fail "select by filename failed"
+pass "select by filename ok"
 
 echo y | bgt task clear
 [[ ! -f "$BETA_FILE" ]] || fail "beta file not deleted"
@@ -89,7 +121,7 @@ function curl() {
   printf '%s' '{"content":[{"text":"# Task: gamma\nCreated: TEST\n## Description\nAI body\n## Progress\n- [ ] step\n## Notes\n"}]}'
 }
 export ANTHROPIC_API_KEY=dummy
-sleep 1; bgt -ai gamma || true
+sleep 1; bgt -ai task new gamma || true
 GAMMA_FILE=$(ls -1t "$PROJ/To-Dos"/*_gamma.md | head -1)
 [[ -f "$GAMMA_FILE" ]] || fail "gamma task missing"
 grep -q '^Status: active' "$GAMMA_FILE" || fail "gamma not active"
