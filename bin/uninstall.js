@@ -8,8 +8,8 @@ const { execSync } = require('child_process');
 const chalk = require('chalk');
 
 const homeDir = os.homedir();
-const MARKER_START = '# >>> bg-task start >>>';
-const MARKER_END = '# <<< bg-task end <<<'
+const MARKER_START = '# >>> bgt-task start >>>';
+const MARKER_END = '# <<< bgt-task end <<<'
 
 console.log(chalk.yellow('🗑️  Uninstalling bg-task...'));
 
@@ -72,7 +72,7 @@ function main() {
   }
 
   // Remove function file
-  const funcPath = path.join(homeDir, '.config', 'bg-task', 'bg-task.zsh');
+  const funcPath = path.join(homeDir, '.config', 'bgt-task', 'bgt.zsh');
   try { fs.unlinkSync(funcPath); } catch {}
 
   if (!removedAny) {

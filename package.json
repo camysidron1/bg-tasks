@@ -1,11 +1,11 @@
 {
-  "name": "bg-task",
+  "name": "bgt-task",
   "version": "1.1.0",
   "description": "Smart terminal-based task management with AI-powered task generation and vim integration",
   "main": "index.js",
   "bin": {
-    "bg-task-install": "./bin/install.js",
-    "bg-task-uninstall": "./bin/uninstall.js"
+    "bgt-task-install": "./bin/install.js",
+    "bgt-task-uninstall": "./bin/uninstall.js"
   },
   "scripts": {
     "postinstall": "node ./bin/install.js",
@@ -27,13 +27,13 @@
   ],
   "author": "Cam Ysidron",
   "license": "MIT",
-  "homepage": "https://github.com/camysidron/bg-task#readme",
+  "homepage": "https://github.com/camysidron/bgt-task#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/camysidron/bg-task.git"
+    "url": "git+https://github.com/camysidron/bgt-task.git"
   },
   "bugs": {
-    "url": "https://github.com/camysidron/bg-task/issues"
+    "url": "https://github.com/camysidron/bgt-task/issues"
   },
   "engines": {
     "node": ">=14.0.0"

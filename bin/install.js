@@ -10,9 +10,9 @@ const chalk = require('chalk');
 const homeDir = os.homedir();
 const packageDir = path.dirname(__dirname);
 
-const MARKER_START = '# >>> bg-task start >>>';
-const MARKER_END = '# <<< bg-task end <<<'
-const SNIPPET = `${MARKER_START}\n# bg-task: source function\nif [ -f "$HOME/.config/bg-task/bg-task.zsh" ]; then\n  source "$HOME/.config/bg-task/bg-task.zsh"\nfi\n${MARKER_END}\n`;
+const MARKER_START = '# >>> bgt-task start >>>';
+const MARKER_END = '# <<< bgt-task end <<<'
+const SNIPPET = `${MARKER_START}\n# bgt-task: source function\nif [ -f "$HOME/.config/bgt-task/bgt.zsh" ]; then\n  source "$HOME/.config/bgt-task/bgt.zsh"\nfi\n${MARKER_END}\n`;
 
 console.log(chalk.cyan('🚀 Installing bg-task...'));
 
@@ -72,7 +72,7 @@ function stripLegacyEmbeddedFunction(configPath) {
   if (!content.includes('# Enhanced bg function')) return;
   const lines = content.split('\n');
   const startIndex = lines.findIndex(l => l.includes('# Enhanced bg function'));
-  // Find matching function end by searching for the closing brace of bg() with alias line that follows
+  // Find matching function end by searching for the closing brace of function with alias line that follows
   let endIndex = -1;
   for (let i = startIndex + 1; i < lines.length; i++) {
     if (lines[i].startsWith('alias begin=')) { endIndex = i; break; }
@@ -83,10 +83,25 @@ function stripLegacyEmbeddedFunction(configPath) {
   }
 }
 
+// Remove an old bg-task snippet block if present
+function removeOldSnippet(configPath) {
+  if (!fs.existsSync(configPath)) return;
+  const OLD_START = '# >>> bg-task start >>>';
+  const OLD_END = '# <<< bg-task end <<<'
+  let content = fs.readFileSync(configPath, 'utf8');
+  const startIdx = content.indexOf(OLD_START);
+  const endIdx = content.indexOf(OLD_END);
+  if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+    const before = content.slice(0, startIdx);
+    const after = content.slice(endIdx + OLD_END.length);
+    fs.writeFileSync(configPath, before + after);
+  }
+}
+
 function main() {
   try {
-    const configDir = path.join(homeDir, '.config', 'bg-task');
-    const funcPath = path.join(configDir, 'bg-task.zsh');
+    const configDir = path.join(homeDir, '.config', 'bgt-task');
+    const funcPath = path.join(configDir, 'bgt.zsh');
     const configPath = getShellConfigPath();
 
     // Ensure config directory and write function file
@@ -98,8 +113,9 @@ function main() {
     if (!fs.existsSync(configPath)) fs.writeFileSync(configPath, '');
     const backup = backupFile(configPath);
 
-    // Remove legacy embedded function if present and insert idempotent snippet
+    // Remove legacy embedded function and old bg-task snippet if present, then insert idempotent new snippet
     stripLegacyEmbeddedFunction(configPath);
+    removeOldSnippet(configPath);
     applySnippetToConfig(configPath);
 
     // Validate and rollback if necessary
@@ -109,14 +125,14 @@ function main() {
       process.exit(1);
     }
 
-    console.log(chalk.green('✅ bg-task installed: added source snippet to your shell config.'));
+    console.log(chalk.green('✅ bgt-task installed: added source snippet to your shell config.'));
     console.log(chalk.gray(`Function file: ${funcPath}`));
 
-    console.log(chalk.green.bold('\n🎉 bg-task ready!'));
+    console.log(chalk.green.bold('\n🎉 bgt-task ready!'));
     console.log(chalk.cyan('\nNext steps:'));
     console.log(chalk.white('  1. Restart your terminal or run: source ' + configPath));
-    console.log(chalk.white('  2. Run: bg --setup'));
-    console.log(chalk.white('  3. Try: bg --help'));
+    console.log(chalk.white('  2. Run: bgt --setup'));
+    console.log(chalk.white('  3. Try: bgt --help'));
   } catch (error) {
     console.error(chalk.red('❌ Installation failed:'), error.message);
     process.exit(1);

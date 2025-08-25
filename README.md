@@ -1,4 +1,4 @@
-# 🚀 bg-task
+# 🚀 bgt-task
 
 Smart terminal-based task management with AI-powered task generation.
 
@@ -13,7 +13,7 @@ Smart terminal-based task management with AI-powered task generation.
 ## 🔠️ Installation
 
 ```bash
-npm install -g bg-task
+npm install -g bgt-task
 ```
 
 The package will automatically:
@@ -98,7 +98,7 @@ After installation, you can edit the `bgt` function in your shell config to cust
 ## 🗑️ Uninstalling
 
 ```bash
-npm uninstall -g bg-task
+npm uninstall -g bgt-task
 ```
 
 Then manually remove the `bgt` function from your shell config file (`~/.zshrc`, `~/.bashrc`, etc.).
