@@ -1,5 +1,5 @@
 # Enhanced bg function with AI support and smart setup
-bg() {
+bgt() {
     # Function to find project root (looks for .git directory)
     _find_project_root() {
         local current_dir="$(pwd)"
@@ -104,24 +104,24 @@ bg() {
     }
 
     _print_help() {
-        echo "bg - task helper"
+        echo "bgt - task helper"
         echo ""
         echo "Setup & status:"
-        echo "  bg --setup            Initialize To-Dos and .gitignore in this repo"
-        echo "  bg --status           Show active, latest, and recent tasks"
+        echo "  bgt --setup           Initialize To-Dos and .gitignore in this repo"
+        echo "  bgt --status          Show active, latest, and recent tasks"
         echo ""
         echo "Create & switch:"
-        echo "  bg                    Open latest task and set it active"
-        echo "  bg <name>             Create/switch to <name> and set active (prev -> pending)"
-        echo "  bg -ai <name>         Create AI-prefilled task using terminal context"
+        echo "  bgt                   Open latest task and set it active"
+        echo "  bgt <name>            Create/switch to <name> and set active (prev -> pending)"
+        echo "  bgt -ai <name>        Create AI-prefilled task using terminal context"
         echo ""
         echo "Task utilities:"
-        echo "  bg task show [frag]   Print active/latest or matching task"
-        echo "  bg task open [frag]   Open active/latest or matching task (sets active)"
-        echo "  bg task pending       Mark the active task pending"
-        echo "  bg task complete      Mark the active task complete"
-        echo "  bg task clear         Delete the latest task (with confirmation)"
-        echo "  bg clear              Delete ALL task files (with confirmation)"
+        echo "  bgt task show [frag]  Print active/latest or matching task"
+        echo "  bgt task open [frag]  Open active/latest or matching task (sets active)"
+        echo "  bgt task pending      Mark the active task pending"
+        echo "  bgt task complete     Mark the active task complete"
+        echo "  bgt task clear        Delete the latest task (with confirmation)"
+        echo "  bgt clear             Delete ALL task files (with confirmation)"
     }
     
     # Function to setup the bg environment in the current project
@@ -193,12 +193,12 @@ bg() {
         echo "• Completing a task: sets Status: complete and adds 'Completed: <timestamp>'"
         echo ""
         echo "Commands:"
-        echo "  bg taskname        - Create/switch to a task and set it active"
-        echo "  bg                 - Open latest task and set it active"
-        echo "  bg --status        - Show active/latest and recent tasks"
-        echo "  bg -ai taskname    - Create AI-prefilled task using terminal context"
-        echo "  bg clear           - Delete all task files (with confirmation)"
-        echo "  bg --setup         - Re-run setup here"
+        echo "  bgt taskname       - Create/switch to a task and set it active"
+        echo "  bgt                - Open latest task and set it active"
+        echo "  bgt --status       - Show active/latest and recent tasks"
+        echo "  bgt -ai taskname   - Create AI-prefilled task using terminal context"
+        echo "  bgt clear          - Delete all task files (with confirmation)"
+        echo "  bgt --setup        - Re-run setup here"
         echo ""
         return 0
     }
@@ -220,7 +220,7 @@ bg() {
                 ;;
             --status|-s)
                 if [[ ! -d "$todos_dir" ]]; then
-                    echo "📁 To-Dos directory doesn't exist. Run 'bg --setup' first."
+                echo "📁 To-Dos directory doesn't exist. Run 'bgt --setup' first."
                     return 1
                 fi
                 _print_status
@@ -233,7 +233,7 @@ bg() {
                 case "$subcmd" in
                     show)
                         if [[ ! -d "$todos_dir" ]]; then
-                            echo "📁 To-Dos directory doesn't exist. Run 'bg --setup' first."
+                            echo "📁 To-Dos directory doesn't exist. Run 'bgt --setup' first."
                             return 1
                         fi
                         shift || true
@@ -257,7 +257,7 @@ bg() {
                         ;;
                     open)
                         if [[ ! -d "$todos_dir" ]]; then
-                            echo "📁 To-Dos directory doesn't exist. Run 'bg --setup' first."
+                            echo "📁 To-Dos directory doesn't exist. Run 'bgt --setup' first."
                             return 1
                         fi
                         shift || true
@@ -281,7 +281,7 @@ bg() {
                         ;;
                     pending)
                         if [[ ! -d "$todos_dir" ]]; then
-                            echo "📁 To-Dos directory doesn't exist. Run 'bg --setup' first."
+                        echo "📁 To-Dos directory doesn't exist. Run 'bgt --setup' first."
                             return 1
                         fi
                         local tgtp="$(_get_active)"
@@ -295,7 +295,7 @@ bg() {
                         ;;
                     complete)
                         if [[ ! -d "$todos_dir" ]]; then
-                            echo "📁 To-Dos directory doesn't exist. Run 'bg --setup' first."
+                        echo "📁 To-Dos directory doesn't exist. Run 'bgt --setup' first."
                             return 1
                         fi
                         local tgtc="$(_get_active)"
@@ -309,7 +309,7 @@ bg() {
                         ;;
                     clear)
                         if [[ ! -d "$todos_dir" ]]; then
-                            echo "📁 To-Dos directory doesn't exist. Run 'bg --setup' first."
+                        echo "📁 To-Dos directory doesn't exist. Run 'bgt --setup' first."
                             return 1
                         fi
                         local latest="$(_find_latest_task)"
@@ -341,7 +341,7 @@ bg() {
                         ;;
                     *)
                         echo "❌ Unknown 'task' subcommand: $subcmd"
-                        echo "Usage: bg task show [name-fragment]"
+                        echo "Usage: bgt task show [name-fragment]"
                         return 1
                         ;;
                 esac
@@ -371,7 +371,7 @@ bg() {
                 ;;
             -*)
                 echo "❌ Unknown flag: $1"
-                echo "Usage: bg [--setup] [-ai] [taskname|clear]"
+                echo "Usage: bgt [--setup] [-ai] [taskname|clear]"
                 return 1
                 ;;
             *)
@@ -389,7 +389,7 @@ bg() {
     
     # Ensure To-Dos directory exists
     if [[ ! -d "$todos_dir" ]]; then
-        echo "📁 To-Dos directory doesn't exist. Run 'bg --setup' first."
+        echo "📁 To-Dos directory doesn't exist. Run 'bgt --setup' first."
         return 1
     fi
     
@@ -440,7 +440,7 @@ bg() {
         # Check if API key is available
         if [[ -z "$ANTHROPIC_API_KEY" ]]; then
             echo "⚠️  ANTHROPIC_API_KEY not found. Using default template."
-            echo "   Run 'bg --setup' for setup instructions."
+            echo "   Run 'bgt --setup' for setup instructions."
             use_ai=false
         fi
     fi
@@ -448,9 +448,9 @@ bg() {
     if [[ "$use_ai" == true ]]; then
         # Get recent terminal history (last 20 commands, excluding bg commands)
         local history_context=""
-        history_context=$(fc -ln -50 2>/dev/null | grep -v ' bg ' | tail -20)
+        history_context=$(fc -ln -50 2>/dev/null | grep -v ' bgt ' | tail -20)
         if [[ -z "$history_context" && -r ${HISTFILE:-$HOME/.zsh_history} ]]; then
-            history_context=$(tail -n 50 "${HISTFILE:-$HOME/.zsh_history}" 2>/dev/null | sed 's/^: [0-9]*:[0-9]*;//' | grep -v ' bg ' | tail -20)
+            history_context=$(tail -n 50 "${HISTFILE:-$HOME/.zsh_history}" 2>/dev/null | sed 's/^: [0-9]*:[0-9]*;//' | grep -v ' bgt ' | tail -20)
         fi
         local current_dir=$(pwd)
         local git_status=""
@@ -545,4 +545,4 @@ Be specific and actionable. If the terminal history shows specific files, comman
 }
 
 # Alias for the function
-alias begin='bg'
+alias begin='bgt'
